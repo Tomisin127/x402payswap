@@ -93,7 +93,20 @@ export function SwapPanel({ walletClient, address, selected, onSelect }: Props) 
         throw new Error(message)
       }
 
-      const json = (await response.json()) as unknown
+      // Defensive: if the upstream (e.g. CDP facilitator) returns plaintext
+      // like "Unauthorized" with a 200-ish status, response.json() would
+      // throw "Unexpected token 'U'…". Read text first, then try to parse.
+      const rawBody = await response.text()
+      let json: unknown
+      try {
+        json = rawBody ? JSON.parse(rawBody) : null
+      } catch {
+        throw new Error(
+          rawBody.trim().length > 0
+            ? `Server returned a non-JSON response: "${rawBody.slice(0, 160)}"`
+            : "Server returned an empty response.",
+        )
+      }
       setOutput(json)
       setLastTx({ hash: settlement.txHash, payer: settlement.payer })
       setStatus("success")
