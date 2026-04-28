@@ -6,7 +6,6 @@ import { ArrowLeftRight } from "lucide-react"
 import { WalletConnect } from "@/components/wallet-connect"
 import { SwapPanel } from "@/components/swap-panel"
 import { ActivityFeed } from "@/components/activity-feed"
-import { AggregatorStrip } from "@/components/aggregator-strip"
 import { PAID_ENDPOINTS, type PaidEndpointMeta } from "@/lib/endpoints"
 
 export default function Page() {
@@ -56,11 +55,6 @@ export default function Page() {
             <ActivityFeed address={address} />
           </aside>
         </section>
-
-        {/* Route aggregator */}
-        <div className="mt-5">
-          <AggregatorStrip selectedPath={selected.path} onSelect={setSelected} />
-        </div>
 
         <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>Payments settle on Base mainnet via the Coinbase CDP facilitator.</span>
