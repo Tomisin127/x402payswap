@@ -41,9 +41,14 @@ const routes = buildMiddlewareRoutes("base")
 const facilitator = {
   url: cdpFacilitator.url,
   createAuthHeaders: async () => {
+    const fn = cdpFacilitator.createAuthHeaders
+    if (!fn) {
+      throw new Error(
+        "CDP facilitator is missing createAuthHeaders. Check that CDP_API_KEY_ID and CDP_API_KEY_SECRET are set.",
+      )
+    }
     try {
-      const headers = await cdpFacilitator.createAuthHeaders()
-      return headers
+      return await fn()
     } catch (err) {
       console.error(
         "[v0] CDP createAuthHeaders failed — verify CDP_API_KEY_ID and CDP_API_KEY_SECRET are correct and the project is enabled for x402.",
