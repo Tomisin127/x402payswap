@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import type { WalletClient } from "viem"
-import { Wallet, LogOut, ChevronDown, Loader2 } from "lucide-react"
+import { Wallet, LogOut, ChevronDown, Loader2, AlertTriangle } from "lucide-react"
 import {
   connectBaseWallet,
   connectCoinbaseSmartWallet,
@@ -100,13 +100,11 @@ export function WalletConnect({ walletClient, address, onConnect, onDisconnect }
             </div>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => handleConnect("smart")}>
-            <span className="flex size-4 items-center justify-center rounded-sm bg-primary text-[10px] font-bold text-primary-foreground">
-              CB
-            </span>
+            <AlertTriangle className="size-4 text-muted-foreground" />
             <div className="flex flex-col">
               <span className="text-sm">Coinbase Smart Wallet</span>
               <span className="text-xs text-muted-foreground">
-                Passkey · gasless · keys.coinbase.com
+                Not supported by x402 — USDC needs EOA signatures
               </span>
             </div>
           </DropdownMenuItem>
