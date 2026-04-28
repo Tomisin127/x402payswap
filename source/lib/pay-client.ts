@@ -1,8 +1,7 @@
 "use client"
 
 import type { WalletClient } from "viem"
-import { wrapFetchWithPayment } from "x402-fetch"
-import { decodeXPaymentResponse } from "x402/shared"
+import { wrapFetchWithPayment, decodeXPaymentResponse } from "x402-fetch"
 
 /**
  * Client-side x402 swap flow.

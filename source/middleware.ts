@@ -26,7 +26,14 @@ const payTo = (process.env.PAY_TO_ADDRESS ??
 
 const routes = buildMiddlewareRoutes("base")
 
-export const middleware = paymentMiddleware(payTo, routes, facilitator)
+// Cast: `@coinbase/x402` ships types from a newer internal `@x402/core`,
+// which is structurally compatible with `x402-next`'s expected shape but
+// declared in a separate package. Runtime is identical.
+export const middleware = paymentMiddleware(
+  payTo,
+  routes,
+  facilitator as Parameters<typeof paymentMiddleware>[2],
+)
 
 console.log(
   "[v0] x402 middleware loaded via CDP facilitator. payTo:",
