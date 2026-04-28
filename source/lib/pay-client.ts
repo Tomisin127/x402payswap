@@ -12,13 +12,15 @@ import { wrapFetchWithPayment, decodeXPaymentResponse } from "x402-fetch"
  *      asks the wallet to sign an EIP-3009 `transferWithAuthorization`,
  *      base64-encodes the signed payload, and retries with `X-PAYMENT`.
  *   3. The Coinbase CDP facilitator (configured in `middleware.ts`)
- *      verifies the signature — including ERC-1271 / ERC-6492 wrapped
- *      signatures from Coinbase Smart Wallet / Base App — and settles the
- *      USDC transfer on Base. The facilitator returns settlement metadata
- *      via the `X-PAYMENT-RESPONSE` header.
+ *      verifies the ECDSA signature and settles the USDC transfer on Base
+ *      mainnet. The facilitator returns settlement metadata via the
+ *      `X-PAYMENT-RESPONSE` header.
  *
- * No smart-wallet bypass / fallback is needed: the Coinbase facilitator
- * handles every wallet shape natively.
+ * NOTE: USDC's on-chain `transferWithAuthorization` only validates EOA
+ * (ECDSA) signatures via `ecrecover`. Smart-wallet signatures (ERC-1271 /
+ * ERC-6492) are rejected by CDP with `invalid_payload`. The wallet
+ * picker (`wallet-connect.tsx`) reflects this; the swap panel translates
+ * the error into a clear, actionable message if it ever fires.
  */
 
 export type SettlementMeta = {

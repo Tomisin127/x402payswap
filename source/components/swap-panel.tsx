@@ -70,11 +70,18 @@ export function SwapPanel({ walletClient, address, selected, onSelect }: Props) 
         } catch {
           parsed = null
         }
-        const message =
+        const rawMessage =
           (parsed?.error as string) ||
           (parsed?.message as string) ||
           raw ||
           `Request failed with ${response.status}`
+
+        // Translate cryptic facilitator codes into actionable messages.
+        // `invalid_payload` is what CDP returns when the signature can't be
+        // validated by USDC's on-chain `transferWithAuthorization` —
+        // exclusively a smart-wallet (ERC-1271 / ERC-6492) issue, since
+        // USDC native uses `ecrecover` and only accepts EOA signatures.
+        const message = humanizePaymentError(rawMessage, response.status)
 
         await fetch("/api/tx-log", {
           method: "POST",
@@ -276,6 +283,33 @@ export function SwapPanel({ walletClient, address, selected, onSelect }: Props) 
       )}
     </div>
   )
+}
+
+/**
+ * Convert raw facilitator error strings into friendly, actionable text.
+ * `invalid_payload` from CDP almost always means the wallet produced a
+ * smart-contract signature (ERC-1271 / ERC-6492) for an EIP-3009
+ * `transferWithAuthorization`, which USDC's on-chain code rejects.
+ */
+function humanizePaymentError(raw: string, status: number): string {
+  const lc = raw.toLowerCase()
+
+  if (lc.includes("invalid_payload") || lc.includes("invalid signature") || lc.includes("invalid_signature")) {
+    return "This wallet can't sign x402 payments. Coinbase Smart Wallet and Base App produce smart-contract signatures, but USDC's on-chain transferWithAuthorization only accepts EOA signatures. Connect with MetaMask, Rabby, or the Coinbase Wallet browser extension instead."
+  }
+  if (lc.includes("insufficient_funds") || lc.includes("insufficient funds")) {
+    return "Insufficient USDC balance on Base. Top up the connected wallet and try again."
+  }
+  if (lc.includes("expired") || lc.includes("deadline")) {
+    return "Payment authorization expired before settlement. Please try again."
+  }
+  if (lc.includes("payment facilitator unavailable") || lc.includes("facilitator")) {
+    return raw // already humanized by middleware
+  }
+  if (status === 500) {
+    return `Server error during payment: ${raw}. Please retry in a moment.`
+  }
+  return raw
 }
 
 function getDownloadLink(json: unknown): string | null {

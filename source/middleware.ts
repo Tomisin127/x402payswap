@@ -1,5 +1,6 @@
 import { paymentMiddleware } from "x402-next"
-import { facilitator } from "@coinbase/x402"
+import { facilitator as cdpFacilitator } from "@coinbase/x402"
+import { NextResponse, type NextRequest } from "next/server"
 import { buildMiddlewareRoutes } from "@/lib/endpoints"
 
 /**
@@ -10,10 +11,15 @@ import { buildMiddlewareRoutes } from "@/lib/endpoints"
  * The client (`lib/pay-client.ts` -> `x402-fetch`) signs an EIP-3009
  * `transferWithAuthorization` and retries with an `X-PAYMENT` header.
  *
- * The Coinbase CDP facilitator verifies the signature (EOA, ERC-1271
- * smart-wallet, and ERC-6492 counterfactual signatures are all supported)
- * and settles the USDC transfer on Base mainnet, then returns the
- * settlement details in the `X-PAYMENT-RESPONSE` header.
+ * The CDP facilitator (https://api.cdp.coinbase.com/platform/v2/x402)
+ * verifies the signature, settles the USDC transfer on Base mainnet, and
+ * returns the settlement details in the `X-PAYMENT-RESPONSE` header.
+ *
+ * IMPORTANT: USDC's on-chain `transferWithAuthorization` validates the
+ * signature with `ecrecover`, so it ONLY accepts EOA / ECDSA signatures.
+ * Coinbase Smart Wallet and Base App use ERC-1271 / ERC-6492 wrapped
+ * signatures, which CDP rejects with `invalid_payload`. The UI guides
+ * those users to use an EOA wallet instead.
  *
  * Required env vars:
  *   - PAY_TO_ADDRESS       Your receiving wallet on Base (0x...).
@@ -26,10 +32,34 @@ const payTo = (process.env.PAY_TO_ADDRESS ??
 
 const routes = buildMiddlewareRoutes("base")
 
-// Cast: `@coinbase/x402` ships types from a newer internal `@x402/core`,
-// which is structurally compatible with `x402-next`'s expected shape but
-// declared in a separate package. Runtime is identical.
-export const middleware = paymentMiddleware(
+/**
+ * Wrap the CDP facilitator so JWT-generation errors are logged with full
+ * detail (instead of swallowing a stack trace into a 500). We still
+ * re-throw — the outer middleware wrapper below catches and converts the
+ * throw into a clean 402 with a usable error message.
+ */
+const facilitator = {
+  url: cdpFacilitator.url,
+  createAuthHeaders: async () => {
+    const fn = cdpFacilitator.createAuthHeaders
+    if (!fn) {
+      throw new Error(
+        "CDP facilitator is missing createAuthHeaders. Check that CDP_API_KEY_ID and CDP_API_KEY_SECRET are set.",
+      )
+    }
+    try {
+      return await fn()
+    } catch (err) {
+      console.error(
+        "[v0] CDP createAuthHeaders failed — verify CDP_API_KEY_ID and CDP_API_KEY_SECRET are correct and the project is enabled for x402.",
+        err,
+      )
+      throw err
+    }
+  },
+}
+
+const handler = paymentMiddleware(
   payTo,
   routes,
   facilitator as Parameters<typeof paymentMiddleware>[2],
@@ -41,6 +71,36 @@ console.log(
   "routes:",
   Object.keys(routes),
 )
+
+/**
+ * Top-level error boundary for x402 middleware.
+ * ----------------------------------------------
+ * If the inner `paymentMiddleware` throws (e.g. CDP returns a non-JSON
+ * body, JWT generation fails, network error to CDP, etc.) Next.js would
+ * normally serve a 500 with no useful body and the client sees only
+ * "Request failed with 500". We catch the throw here and return a proper
+ * `402 Payment Required` JSON response carrying the actual error string,
+ * so `pay-client` / `swap-panel` can surface it to the user.
+ */
+export async function middleware(req: NextRequest) {
+  try {
+    return await handler(req)
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown facilitator error"
+    console.error("[v0] x402 middleware crashed for", req.nextUrl.pathname, ":", err)
+    return new NextResponse(
+      JSON.stringify({
+        x402Version: 1,
+        error: `Payment facilitator unavailable: ${message}. Please retry, or try a different wallet.`,
+      }),
+      {
+        status: 402,
+        headers: { "Content-Type": "application/json" },
+      },
+    )
+  }
+}
 
 // Next.js requires `config.matcher` to be a literal at compile time (no
 // imported constants or expressions), so we spell the paid paths out here.
